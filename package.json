@@ -1,0 +1,58 @@
+{
+  "name": "n8n-nodes-nilai",
+  "version": "0.1.0",
+  "description": "Use Nillion nilAI — private LLM inference in a TEE, OpenAI-compatible — directly in n8n, with built-in cryptographic verification of every response.",
+  "keywords": [
+    "n8n-community-node-package",
+    "nillion",
+    "nilai",
+    "tee",
+    "privacy",
+    "llm",
+    "ai",
+    "confidential-computing"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/NillionNetwork/n8n-nilai-node",
+  "author": {
+    "name": "Robert Moore",
+    "email": "iamrobertmoore@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NillionNetwork/n8n-nilai-node.git"
+  },
+  "engines": {
+    "node": ">=18.10"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "rm -rf dist && tsc && mkdir -p dist/nodes/NilAi dist/credentials && cp nodes/NilAi/nilai.svg dist/nodes/NilAi/nilai.svg && cp nodes/NilAi/nilai.svg dist/credentials/nilai.svg",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "index.js"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/NilAiApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/NilAi/NilAi.node.js"
+    ]
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "n8n-workflow": "^2.16.0",
+    "typescript": "^5.6.0"
+  }
+}
