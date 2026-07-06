@@ -29,6 +29,8 @@
   "scripts": {
     "build": "rm -rf dist && tsc && mkdir -p dist/nodes/NilAi dist/credentials && cp nodes/NilAi/nilai.svg dist/nodes/NilAi/nilai.svg && cp nodes/NilAi/nilai.svg dist/credentials/nilai.svg",
     "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "check-version": "node bin/check-version.js",
     "prepublishOnly": "npm run build"
   },
   "files": [
@@ -53,6 +55,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "n8n-workflow": "^2.16.0",
+    "semver": "^7.7.2",
     "typescript": "^5.6.0"
   }
 }
