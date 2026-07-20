@@ -87,14 +87,14 @@ export class NilAi implements INodeType {
 		],
 		properties: [
 			{
-				displayName: 'Model',
+				displayName: 'Model Name or ID',
 				name: 'model',
 				type: 'options',
 				typeOptions: {
 					loadOptionsMethod: 'getModels',
 				},
-				default: 'google/gemma-4-26B-A4B-it',
-				description: 'The model to run inside the nilAI TEE. Loaded live from your nilAI endpoint.',
+				default: '',
+				description: 'The model to run inside the nilAI TEE. Loaded live from your nilAI endpoint. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 			},
 			{
 				displayName: 'Instructions',
@@ -104,8 +104,7 @@ export class NilAi implements INodeType {
 					rows: 2,
 				},
 				default: '',
-				description:
-					"What you want the model to do, e.g. 'Summarise this in 3 sentences and 3-5 key bullet points'.",
+				description: 'What you want the model to do, e.g. \'Summarise this in 3 sentences and 3-5 key bullet points\'',
 				hint: 'Plain text — the task only. Keep your data out of here (put that in Input). Leave empty to send just the Input as-is.',
 			},
 			{
@@ -125,8 +124,7 @@ export class NilAi implements INodeType {
 				name: 'simplify',
 				type: 'boolean',
 				default: true,
-				description:
-					"Whether to return a clean result instead of nilAI's full raw response object.",
+				description: 'Whether to return a clean result instead of nilAI\'s full raw response object',
 				hint: 'On: tidy output — just the answer, the verification results and token usage. Off: the complete raw nilAI response (every field), handy for debugging.',
 			},
 			{
