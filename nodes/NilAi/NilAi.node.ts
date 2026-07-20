@@ -6,6 +6,7 @@ import {
 	INodeType,
 	INodeTypeDescription,
 	NodeConnectionType,
+	NodeOperationError,
 } from 'n8n-workflow';
 
 import { createPublicKey, verify as cryptoVerify } from 'crypto';
@@ -74,6 +75,7 @@ export class NilAi implements INodeType {
 		subtitle: '={{$parameter["model"]}}',
 		description:
 			'Private, verifiable AI inference inside a Trusted Execution Environment (TEE), powered by Nillion nilAI.',
+		usableAsTool: true,
 		defaults: {
 			name: 'nilAI',
 		},
@@ -211,7 +213,7 @@ export class NilAi implements INodeType {
 				let teeVerified: boolean | null = null;
 				if (doVerify) {
 					if (publicKeyB64 === undefined) {
-						publicKeyB64 = (await this.helpers.httpRequest({
+						publicKeyB64 = (await this.helpers.httpRequestWithAuthentication.call(this, 'nilAiApi', {
 							method: 'GET',
 							url: `${baseUrl}/v1/public_key`,
 							json: true,
@@ -255,7 +257,7 @@ export class NilAi implements INodeType {
 					});
 					continue;
 				}
-				throw error;
+				throw new NodeOperationError(this.getNode(), error as Error);
 			}
 		}
 

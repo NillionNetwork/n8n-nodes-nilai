@@ -1,8 +1,4 @@
 import { X509Certificate, verify as cryptoVerify, createHash } from 'crypto';
-import { connect as tlsConnect } from 'tls';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
-import { homedir, tmpdir } from 'os';
 import type { IExecuteFunctions } from 'n8n-workflow';
 
 const KDS_DOMAIN = 'kdsintf.amd.com';
@@ -15,40 +11,11 @@ const KNOWN_MEASUREMENTS: Record<string, string> = {
 	'0.3.0': '981bcaa62bcd63cb03c7b93a67d1a8c17ff63e45e6d16323a8784bacbfcb254313741bcf32d0bccc795d6ea0e6ac1481',
 };
 
-// AMD certs are stable per chip/TCB, so cache them across executions (in-memory).
-// Keyed by processor — Milan/Genoa/Turin each have their own chain.
+// AMD certs are stable per chip/TCB, so cache them in memory across executions
+// within a warm process. Keyed by processor (chain) / VCEK URL. No on-disk cache:
+// n8n Cloud does not allow community nodes to use the filesystem.
 const certChainCache: Record<string, { ark: X509Certificate; ask: X509Certificate }> = {};
 const vcekCache: Record<string, X509Certificate> = {};
-
-// ...and on disk, so we don't re-fetch from AMD's (heavily rate-limited) KDS on
-// every cold start. Fails over gracefully if the filesystem isn't writable.
-function certCacheDir(): string {
-	for (const base of [join(homedir(), '.n8n'), tmpdir()]) {
-		try {
-			const dir = join(base, '.nilai-cert-cache');
-			mkdirSync(dir, { recursive: true });
-			return dir;
-		} catch {
-			/* try next base */
-		}
-	}
-	return tmpdir();
-}
-function readCertCache(name: string): Buffer | null {
-	try {
-		const p = join(certCacheDir(), name);
-		return existsSync(p) ? readFileSync(p) : null;
-	} catch {
-		return null;
-	}
-}
-function writeCertCache(name: string, data: Buffer): void {
-	try {
-		writeFileSync(join(certCacheDir(), name), data);
-	} catch {
-		/* ignore cache write failures */
-	}
-}
 
 export interface AttestationResult {
 	attestation_verified: boolean;
@@ -137,8 +104,8 @@ export function verifyTcbExtensions(vcekDer: Buffer, tcb: ReportedTcb, chipIdHex
 }
 
 // Parse an AMD KDS cert_chain PEM into { ark, ask }. The self-signed cert is the
-// ARK. Returns null if the PEM doesn't yield exactly that pair (corrupt cache,
-// KDS error page, etc.) so the caller can refetch instead of failing forever.
+// ARK. Returns null if the PEM doesn't yield exactly that pair (KDS error page,
+// etc.) so the caller can refetch instead of caching a bad chain.
 function parseCertChain(pem: string): { ark: X509Certificate; ask: X509Certificate } | null {
 	try {
 		const blocks = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) ?? [];
@@ -155,44 +122,13 @@ function parseCertChain(pem: string): { ark: X509Certificate; ask: X509Certifica
 	}
 }
 
-// Fetch the leaf TLS certificate (DER) the host presents — the cert nilCC binds
-// into report_data. Resolves null on any connection/timeout error (fail-closed).
-async function getServerCertDer(host: string): Promise<Buffer | null> {
-	return new Promise((resolve) => {
-		let settled = false;
-		let socket: ReturnType<typeof tlsConnect> | undefined;
-		const finish = (v: Buffer | null) => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timer);
-			try {
-				socket?.destroy();
-			} catch {
-				/* ignore */
-			}
-			resolve(v);
-		};
-		// Guaranteed resolution — a stuck connection can never hang the node.
-		const timer = setTimeout(() => finish(null), 7000);
-		try {
-			socket = tlsConnect({ host, port: 443, servername: host, rejectUnauthorized: true }, () => {
-				try {
-					const peer = socket!.getPeerCertificate() as { raw?: Buffer };
-					finish(peer && peer.raw ? peer.raw : null);
-				} catch {
-					finish(null);
-				}
-			});
-			socket.on('error', () => finish(null));
-		} catch {
-			finish(null);
-		}
-	});
-}
-
 // nilCC binds report_data = 0x00 || SHA-256(cert SubjectPublicKeyInfo) || zeros.
-// Returns true iff the live host's TLS cert reproduces the report's report_data,
+// Returns true iff a given serving cert reproduces the report's report_data,
 // including the 0x00 prefix byte and the all-zero tail (full reference parity).
+// Retained + exported for offline tests. NOTE: the live TLS-session-binding check
+// is not performed in this node — n8n Cloud does not allow community nodes to open
+// TLS connections, so we cannot fetch the serving cert to compare against it. The
+// report_data value is still surfaced for transparency and out-of-band checking.
 // Exported for offline tests.
 export function checkReportDataBinding(reportDataHex: string, certDer: Buffer): boolean {
 	try {
@@ -227,7 +163,8 @@ export async function verifyEnclaveAttestation(
 		const reportResp = (await ctx.helpers.httpRequest({
 			method: 'GET',
 			url: `${baseUrl}/nilcc/api/v2/report`,
-			json: true, timeout: 15000,
+			json: true,
+			timeout: 15000,
 		})) as {
 			report: Record<string, any>;
 			raw_report: string;
@@ -272,24 +209,18 @@ export async function verifyEnclaveAttestation(
 		}
 		const pad2 = (n: number) => String(n).padStart(2, '0');
 
-		// 3. Fetch AMD cert chain (ASK+ARK) and the chip's VCEK from KDS (cached).
-		// Responses are parsed BEFORE being cached, and an unparseable cached file
-		// triggers a refetch + overwrite — a KDS error page can't poison the cache.
+		// 3. Fetch AMD cert chain (ASK+ARK) and the chip's VCEK from KDS (in-memory
+		// cached). Responses are parsed before being cached, so a KDS error page
+		// can't poison the cache.
 		if (!certChainCache[processor]) {
-			const chainCacheName = `certchain_${processor}.pem`;
-			const cachedChain = readCertCache(chainCacheName);
-			let chain = cachedChain ? parseCertChain(cachedChain.toString('utf8')) : null;
-			if (!chain) {
-				const chainPem = (await ctx.helpers.httpRequest({
-					method: 'GET',
-					url: `https://${KDS_DOMAIN}/vcek/v1/${processor}/cert_chain`,
-					encoding: 'text',
-					timeout: 15000,
-				})) as string;
-				chain = parseCertChain(chainPem);
-				if (!chain) throw new Error('AMD KDS returned an unparseable certificate chain');
-				writeCertCache(chainCacheName, Buffer.from(chainPem, 'utf8'));
-			}
+			const chainPem = (await ctx.helpers.httpRequest({
+				method: 'GET',
+				url: `https://${KDS_DOMAIN}/vcek/v1/${processor}/cert_chain`,
+				encoding: 'text',
+				timeout: 15000,
+			})) as string;
+			const chain = parseCertChain(chainPem);
+			if (!chain) throw new Error('AMD KDS returned an unparseable certificate chain');
 			certChainCache[processor] = chain;
 		}
 		const { ark, ask } = certChainCache[processor];
@@ -298,28 +229,13 @@ export async function verifyEnclaveAttestation(
 			`https://${KDS_DOMAIN}/vcek/v1/${processor}/${chipIdHex}` +
 			`?blSPL=${pad2(tcb.bootloader)}&teeSPL=${pad2(tcb.tee)}&snpSPL=${pad2(tcb.snp)}&ucodeSPL=${pad2(tcb.microcode)}`;
 		if (!vcekCache[vcekUrl]) {
-			const vcekCacheName = `vcek_${chipIdHex}_${tcb.bootloader}_${tcb.tee}_${tcb.snp}_${tcb.microcode}.der`;
-			const cachedDer = readCertCache(vcekCacheName);
-			let vcekCert: X509Certificate | null = null;
-			if (cachedDer) {
-				try {
-					vcekCert = new X509Certificate(cachedDer);
-				} catch {
-					vcekCert = null; // corrupt cache → refetch below
-				}
-			}
-			if (!vcekCert) {
-				const fetched = (await ctx.helpers.httpRequest({
-					method: 'GET',
-					url: vcekUrl,
-					encoding: 'arraybuffer',
-					timeout: 15000,
-				})) as ArrayBuffer;
-				const der = Buffer.from(fetched);
-				vcekCert = new X509Certificate(der); // throws on a bad body — nothing cached
-				writeCertCache(vcekCacheName, der);
-			}
-			vcekCache[vcekUrl] = vcekCert;
+			const fetched = (await ctx.helpers.httpRequest({
+				method: 'GET',
+				url: vcekUrl,
+				encoding: 'arraybuffer',
+				timeout: 15000,
+			})) as ArrayBuffer;
+			vcekCache[vcekUrl] = new X509Certificate(Buffer.from(fetched)); // throws on a bad body
 		}
 		const vcek = vcekCache[vcekUrl];
 
@@ -347,26 +263,16 @@ export async function verifyEnclaveAttestation(
 			sigValid = false;
 		}
 
-		// 6. Surface measurement + TLS-cert binding (debug policy derived above, from raw).
+		// 6. Surface measurement + report_data (debug policy derived above, from raw).
 		const measurement = raw.subarray(0x90, 0x90 + 48).toString('hex');
 		const known = nilccVersion ? KNOWN_MEASUREMENTS[nilccVersion] : undefined;
 		const measurementMatches = known ? measurement === known : null;
-		// report_data binds the TLS certificate fingerprint into the signed report.
+		// report_data binds the serving TLS certificate fingerprint into the signed
+		// report. We surface it for out-of-band verification; the live TLS-session
+		// binding is not checked here (n8n Cloud disallows raw TLS connections).
 		const reportData = raw.subarray(0x50, 0x50 + 64).toString('hex');
 
 		const tcbOk = verifyTcbExtensions(vcek.raw, tcb, chipIdHex);
-
-		// TLS-session binding: the report's report_data embeds SHA-256 of the serving
-		// cert's public key. Connect to the host, fetch its cert, and confirm it matches.
-		const host = (() => {
-			try {
-				return new URL(baseUrl).hostname;
-			} catch {
-				return '';
-			}
-		})();
-		const serverCertDer = host ? await getServerCertDer(host) : null;
-		const tlsBound = serverCertDer ? checkReportDataBinding(reportData, serverCertDer) : false;
 
 		const checks = {
 			ark_self_signed: arkSelfSigned,
@@ -374,7 +280,6 @@ export async function verifyEnclaveAttestation(
 			vcek_signed_by_ask: vcekByAsk,
 			report_signature_valid: sigValid,
 			vcek_tcb_matches_report: tcbOk,
-			tls_session_bound: tlsBound,
 			debug_disabled: !debugAllowed,
 		};
 		// Hard-fail attestation on a known-measurement MISMATCH. If there is no
