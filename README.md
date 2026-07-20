@@ -45,7 +45,7 @@ Turn off **Simplify Output** to receive the full raw nilAI response.
 Two independent checks, both run locally with no external dependencies:
 
 - **Response signature (`tee_verified`).** nilAI signs each response inside the enclave (secp256k1 ECDSA over SHA-256). The node fetches the enclave's public key, reconstructs the exact signed bytes from the raw response, and verifies the signature.
-- **Enclave attestation (`attestation_verified`).** The node fetches the enclave's AMD SEV-SNP attestation report, fetches the chip's certificate and AMD's certificate chain, and verifies the chain up to AMD's root, the report signature, the TCB values, that debug mode is off, the launch measurement against a known-good build, and that the report binds the live TLS session.
+- **Enclave attestation (`attestation_verified`).** The node fetches the enclave's AMD SEV-SNP attestation report, fetches the chip's certificate and AMD's certificate chain, and verifies the chain up to AMD's root, the report signature, the TCB values, that debug mode is off, and the launch measurement against a known-good build. The signed report also carries a `report_data` value that binds the serving TLS certificate; the node surfaces it in the output for out-of-band checking, but does not open a raw TLS connection to verify that binding live, because n8n's sandbox does not permit community nodes to make TLS connections.
 
 ## Resources
 
