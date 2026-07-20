@@ -40,6 +40,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm run build
-      - env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --tag ${{ needs.check-version.outputs.tag }}
+      # Trusted publishing (OIDC) authenticates via the id-token above — no token
+      # needed. It requires npm >= 11.5.1; setup-node ships an older npm.
+      - run: npm install -g npm@latest
+      - run: npm publish --provenance --tag ${{ needs.check-version.outputs.tag }}
