@@ -69,7 +69,7 @@ export class NilAi implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'nilAI',
 		name: 'nilAi',
-		icon: 'file:nilai.svg',
+		icon: { light: 'file:nilai.svg', dark: 'file:nilai.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["model"]}}',
@@ -257,7 +257,7 @@ export class NilAi implements INodeType {
 					});
 					continue;
 				}
-				throw new NodeOperationError(this.getNode(), error as Error);
+				throw new NodeOperationError(this.getNode(), error as Error, { itemIndex: i });
 			}
 		}
 
