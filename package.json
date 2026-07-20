@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-nilai",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Use Nillion nilAI — private LLM inference in a TEE, OpenAI-compatible — directly in n8n, with built-in cryptographic verification of every response.",
   "keywords": [
     "n8n-community-node-package",
@@ -27,7 +27,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "build": "rm -rf dist && tsc && mkdir -p dist/nodes/NilAi dist/credentials && cp nodes/NilAi/nilai.svg dist/nodes/NilAi/nilai.svg && cp nodes/NilAi/nilai.svg dist/credentials/nilai.svg",
+    "build": "rm -rf dist && tsc && mkdir -p dist/nodes/NilAi dist/credentials && cp nodes/NilAi/nilai.svg dist/nodes/NilAi/nilai.svg && cp nodes/NilAi/nilai-dark.svg dist/nodes/NilAi/nilai-dark.svg && cp nodes/NilAi/nilai.svg dist/credentials/nilai.svg",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "check-version": "node bin/check-version.js",

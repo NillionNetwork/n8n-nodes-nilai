@@ -69,7 +69,7 @@ export class NilAi implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'nilAI',
 		name: 'nilAi',
-		icon: { light: 'file:nilai.svg', dark: 'file:nilai.svg' },
+		icon: { light: 'file:nilai.svg', dark: 'file:nilai-dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["model"]}}',
