@@ -13,14 +13,14 @@
     "confidential-computing"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/NillionNetwork/n8n-nilai-node",
+  "homepage": "https://github.com/NillionNetwork/n8n-nodes-nilai",
   "author": {
     "name": "Robert Moore",
     "email": "iamrobertmoore@gmail.com"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NillionNetwork/n8n-nilai-node.git"
+    "url": "git+https://github.com/NillionNetwork/n8n-nodes-nilai.git"
   },
   "engines": {
     "node": ">=22.0"
