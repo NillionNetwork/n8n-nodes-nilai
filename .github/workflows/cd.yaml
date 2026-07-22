@@ -31,16 +31,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write        # required for npm build provenance (n8n verification)
+      id-token: write        # required so npm can authenticate via OIDC trusted publishing
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.14.0"
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm run build
-      # Trusted publishing (OIDC) authenticates via the id-token above — no token
-      # needed. It requires npm >= 11.5.1; setup-node ships an older npm.
-      - run: npm install -g npm@latest
+      # Trusted publishing (OIDC) requires npm >= 11.5.1; actions/setup-node
+      # currently ships an older npm bundled with Node, so it's upgraded here.
+      - run: npm install -g npm@^11
       - run: npm publish --provenance --tag ${{ needs.check-version.outputs.tag }}
