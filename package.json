@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-nilai",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Use Nillion nilAI — private LLM inference in a TEE, OpenAI-compatible — directly in n8n, with built-in cryptographic verification of every response.",
   "keywords": [
     "n8n-community-node-package",
